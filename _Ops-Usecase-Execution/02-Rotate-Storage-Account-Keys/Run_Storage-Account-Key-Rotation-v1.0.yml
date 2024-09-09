@@ -38,27 +38,6 @@ parameters:
   values:
   - Primary
   - Secondary 
-
-# $body = @"
-          # {
-          #     "resources": {
-          #         "repositories": {
-          #             "self": {
-          #                 "refName": "$(Build.SourceBranch)"
-          #             }
-          #         }
-          #     },
-          #     "templateParameters": {
-          #         "SubscriptionID": "$(SubscriptionID)"
-          #         "EntraIDGrpName": "$(EntraIDGrpName)"
-          #     }
-          # }
-          # "@
-
-# - name: SUBSCRIPTIONID
-#   displayName: Subscription ID Details Follow Below:-
-#   type: string
-#   default: 
     
 ######################
 #DECLARE VARIABLES:-
