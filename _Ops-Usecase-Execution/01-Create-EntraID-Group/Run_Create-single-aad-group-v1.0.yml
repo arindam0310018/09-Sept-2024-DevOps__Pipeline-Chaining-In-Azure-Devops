@@ -1,0 +1,109 @@
+trigger:
+  none
+
+######################
+#DECLARE PARAMETERS:-
+######################
+parameters:
+
+- name: SUBSCRIPTIONID
+  displayName: Subscription ID Details Follow Below:-
+  type: string
+  default: '210e66cb-55cf-424e-8daa-6cad804ab604'
+  values:
+    - 210e66cb-55cf-424e-8daa-6cad804ab604
+    - 210e66cb-55cf-424e-8daa-6cad804ab605
+    - 210e66cb-55cf-424e-8daa-6cad804ab606
+    - 210e66cb-55cf-424e-8daa-6cad804ab607
+
+# $body = @"
+          # {
+          #     "resources": {
+          #         "repositories": {
+          #             "self": {
+          #                 "refName": "$(Build.SourceBranch)"
+          #             }
+          #         }
+          #     },
+          #     "templateParameters": {
+          #         "SubscriptionID": "$(SubscriptionID)"
+          #         "EntraIDGrpName": "$(EntraIDGrpName)"
+          #     }
+          # }
+          # "@
+
+# - name: SUBSCRIPTIONID
+#   displayName: Subscription ID Details Follow Below:-
+#   type: string
+#   default: 
+
+- name: ENTRAIDGROUPNAME
+  displayName: Please Provide the Entra ID Group Name:-
+  type: object
+  default: 
+    
+######################
+#DECLARE VARIABLES:-
+######################
+variables:
+  SubscriptionID: ${{ parameters.SUBSCRIPTIONID }}
+  EntraIDGrpName: ${{ parameters.ENTRAIDGROUPNAME }}
+  BuildAgent: windows-latest
+  DevopsOrgName: arindammitra0251
+  DevopsPrjName: AMCLOUDOPS
+
+#########################
+# Declare Build Agents:-
+#########################  
+pool:
+  vmImage: $(BuildAgent)
+
+###################
+# Declare Stages:-
+###################
+
+stages:
+- stage: TriggerCreateEntraIDGroup
+  jobs:
+  - job: TriggerCreateEntraIDGroup
+    steps:
+    - task: PowerShell@2
+      inputs:
+        targetType: 'inline'
+        script: |
+        
+          $body = @{
+            resources = @{
+                repositories = @{
+                    self = @{
+                        refName = "$(Build.SourceBranch)"
+                      }
+                }
+              }
+              templateParameters = @{
+                  "SubscriptionID" = "$(SubscriptionID)"
+                  "EntraIDGrpName" = "$(EntraIDGrpName)"
+              }
+          } | ConvertTo-Json -Depth 10
+
+          
+          try {
+            $jsonValid = $body | ConvertFrom-Json
+            Write-Output "JSON is valid."
+            }
+
+          catch {
+            Write-Error "Invalid JSON: $_"
+            exit 1
+          }
+
+          $url = "https://dev.azure.com/$(DevopsOrgName)/$(DevopsPrjName)/_apis/pipelines/102/runs?api-version=6.0-preview.1"
+          $headers = @{
+              Authorization = "Bearer $(System.AccessToken)"
+              "Content-Type" = "application/json"
+          }
+          
+          Invoke-RestMethod -Uri $url -Method Post -Body $body -Headers $headers
+          
+      env:
+        SYSTEM_ACCESSTOKEN: $(System.AccessToken)

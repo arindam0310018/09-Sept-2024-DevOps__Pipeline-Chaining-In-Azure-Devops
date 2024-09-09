@@ -1,0 +1,153 @@
+trigger:
+  none
+
+######################
+#DECLARE PARAMETERS:-
+######################
+parameters:
+- name: SubscriptionID
+  displayName: Subscription ID Details Follow Below:-
+  type: string
+  default: 
+
+- name: Rgname
+  displayName: Please Provide the Resource Group Name:-
+  type: object
+  default: 
+
+- name: StorageAccountName
+  displayName: Please Provide the Storage Account Name:-
+  type: object
+  default:
+
+- name: KvName
+  displayName: Please Provide the Keyvault Name:-
+  type: object
+  default: 
+
+- name: StorageAccountKeys
+  displayName: Choose Storage Account Keys - Primary or Secondary:-
+  type: string
+  default: 
+  
+######################
+#DECLARE VARIABLES:-
+######################
+variables:
+  ServiceConnection: amcloud-cicd-service-connection
+  BuildAgent: windows-latest
+
+#########################
+# Declare Build Agents:-
+#########################
+pool:
+  vmImage: $(BuildAgent)
+
+###################
+# Declare Stages:-
+###################
+
+stages:
+
+- stage: VALIDATE_RG_STORAGE_ACCOUNT_AND_KV 
+  jobs:
+  - job: VALIDATE_RG_STORAGE_ACCOUNT_AND_KV 
+    displayName: VALIDATE RG STORAGE ACCOUNT & KV
+    steps:
+    - task: AzureCLI@2
+      displayName: SET AZURE ACCOUNT
+      inputs:
+        azureSubscription: $(ServiceConnection)
+        scriptType: ps
+        scriptLocation: inlineScript
+        inlineScript: |
+          az --version
+          az account set --subscription ${{ parameters.SubscriptionID }}
+          az account show  
+    - task: AzureCLI@2
+      displayName: VALIDATE RG STORAGE ACCOUNT & RG
+      inputs:
+        azureSubscription: $(ServiceConnection)
+        scriptType: ps
+        scriptLocation: inlineScript
+        inlineScript: |      
+          $i = az group exists -n ${{ parameters.Rgname }}
+            if ($i -eq "true") {
+              echo "#####################################################"
+              echo "Resource Group ${{ parameters.Rgname }} exists!!!"
+              echo "#####################################################"
+              $j = az storage account check-name --name ${{ parameters.StorageAccountName }} --query "reason" --out tsv
+                if ($j -eq "AlreadyExists") {
+                  echo "###################################################################"
+                  echo "Storage Account ${{ parameters.StorageAccountName }} exists!!!"
+                  echo "###################################################################"
+                  $k = az keyvault list --resource-group ${{ parameters.Rgname }} --query [].name -o tsv		
+                    if ($k -eq "${{ parameters.KvName }}") {
+                      echo "###################################################################"
+                      echo "Key Vault ${{ parameters.KvName }} exists!!!"
+                      echo "###################################################################"
+                    }
+                  else {
+                    echo "###################################################################################################"
+                    echo "Key Vault ${{ parameters.KvName }} DOES NOT EXISTS in Resource Group ${{ parameters.Rgname }}!!!"
+                    echo "###################################################################################################"
+                    exit 1
+                  }
+                }  
+                else {
+                  echo "#######################################################################################################################"
+                  echo "Storage Account ${{ parameters.StorageAccountName }} DOES NOT EXISTS in Resource Group ${{ parameters.Rgname }}!!!"
+                  echo "#######################################################################################################################"
+                  exit 1
+                }              
+            }
+            else {
+              echo "#############################################################"
+              echo "Resource Group ${{ parameters.Rgname }} DOES NOT EXISTS!!!"
+              echo "#############################################################"
+              exit 1
+            }
+
+- stage: RENEW_STORAGE_ACCOUNT_PRIMARY_KEY
+  condition: |
+     and(succeeded(),
+       eq('${{ parameters.StorageAccountKeys }}', 'Primary')
+     ) 
+  jobs:
+  - job: RENEW_STORAGE_ACCOUNT_PRIMARY_KEY 
+    displayName: ROTATE PRIMARY KEY & STORE IN KV
+    steps:
+    - task: AzureCLI@2
+      displayName: ROTATE AND STORE
+      inputs:
+        azureSubscription: $(ServiceConnection)
+        scriptType: ps
+        scriptLocation: inlineScript
+        inlineScript: |
+          $saprimary = az storage account keys renew -g ${{ parameters.Rgname }} -n ${{ parameters.StorageAccountName }} --key ${{ parameters.StorageAccountKeys }} --query [0].value -o tsv
+          az keyvault secret set --name "${{ parameters.StorageAccountName }}-${{ parameters.StorageAccountKeys }}" --vault-name ${{ parameters.KvName }} --value $saprimary
+          echo "#################################################################################################################################################################"
+          echo "Storage Account Primary Key has been successfully Rotated and Stored in Key Vault ${{ parameters.KvName }} under the Resource Group ${{ parameters.Rgname }}!!!"
+          echo "#################################################################################################################################################################"
+
+- stage: RENEW_STORAGE_ACCOUNT_SECONDARY_KEY
+  condition: |
+       eq('${{ parameters.StorageAccountKeys }}', 'Secondary')
+  dependsOn: VALIDATE_RG_STORAGE_ACCOUNT_AND_KV   
+  jobs:
+  - job: RENEW_STORAGE_ACCOUNT_SECONDARY_KEY 
+    displayName: ROTATE SECONDARY KEY & STORE IN KV
+    steps:
+    - task: AzureCLI@2
+      displayName: ROTATE AND STORE
+      inputs:
+        azureSubscription: $(ServiceConnection)
+        scriptType: ps
+        scriptLocation: inlineScript
+        inlineScript: |
+          $sasecondary = az storage account keys renew -g ${{ parameters.Rgname }} -n ${{ parameters.StorageAccountName }} --key ${{ parameters.StorageAccountKeys }} --query [1].value -o tsv
+          az keyvault secret set --name "${{ parameters.StorageAccountName }}-${{ parameters.StorageAccountKeys }}" --vault-name ${{ parameters.KvName }} --value $sasecondary
+          echo "#################################################################################################################################################################"
+          echo "Storage Account Secondary Key has been successfully Rotated and Stored in Key Vault ${{ parameters.KvName }} under the Resource Group ${{ parameters.Rgname }}!!!"
+          echo "#################################################################################################################################################################"
+
