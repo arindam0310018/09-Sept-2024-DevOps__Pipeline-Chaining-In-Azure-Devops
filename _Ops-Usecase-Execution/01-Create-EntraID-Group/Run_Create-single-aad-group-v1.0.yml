@@ -16,27 +16,6 @@ parameters:
     - 210e66cb-55cf-424e-8daa-6cad804ab606
     - 210e66cb-55cf-424e-8daa-6cad804ab607
 
-# $body = @"
-          # {
-          #     "resources": {
-          #         "repositories": {
-          #             "self": {
-          #                 "refName": "$(Build.SourceBranch)"
-          #             }
-          #         }
-          #     },
-          #     "templateParameters": {
-          #         "SubscriptionID": "$(SubscriptionID)"
-          #         "EntraIDGrpName": "$(EntraIDGrpName)"
-          #     }
-          # }
-          # "@
-
-# - name: SUBSCRIPTIONID
-#   displayName: Subscription ID Details Follow Below:-
-#   type: string
-#   default: 
-
 - name: ENTRAIDGROUPNAME
   displayName: Please Provide the Entra ID Group Name:-
   type: object
